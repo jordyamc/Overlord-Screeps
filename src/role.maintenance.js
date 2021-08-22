@@ -25,7 +25,7 @@ module.exports.role = function role(creep) {
     }
     // Work
     if (creep.memory.working) {
-        if (!creep.memory.wallWork && !Memory.roomCache[creep.room.name].threatLevel && !creep.room.nukes.length && (creep.memory.constructionSite || creep.constructionWork())) {
+        if (!creep.memory.wallWork && !Memory.roomCache[creep.room.name].threatLevel && !creep.room.nukes.length && (creep.memory.constructionSite || creep.repairWork())) {
             creep.builderFunction();
         } else {
             creep.memory.wallWork = true;
@@ -48,8 +48,8 @@ function wallMaintainer(creep) {
             nukeSite = _.filter(creep.room.constructionSites, (s) => s.structureType === STRUCTURE_RAMPART && s.pos.getRangeTo(s.pos.findClosestByRange(FIND_NUKES)) <= 5)[0];
             nukeRampart = _.min(_.filter(creep.room.structures, (s) => s.structureType === STRUCTURE_RAMPART && s.pos.getRangeTo(s.pos.findClosestByRange(FIND_NUKES)) <= 5), 'hits');
         }
-        let hostileBarrier = _.min(_.filter(creep.room.structures, (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) && s.pos.findInRange(_.filter(s.room.hostileCreeps, (c) => c.getActiveBodyparts(ATTACK) || c.getActiveBodyparts(RANGED_ATTACK) || c.getActiveBodyparts(WORK)), 3)[0]), 'hits');
-        let barriers = _.filter(creep.room.structures, (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) && (s.hits < BARRIER_TARGET_HIT_POINTS[s.room.controller.level] || s.room.energyState));
+        let hostileBarrier = _.min(_.filter(creep.room.structures, (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) && s.pos.findInRange(_.filter(s.room.hostileCreeps, (c) => c.hasActiveBodyparts(ATTACK) || c.hasActiveBodyparts(RANGED_ATTACK) || c.hasActiveBodyparts(WORK)), 3)[0]), 'hits');
+        let barriers = _.filter(creep.room.structures, (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) && (s.hits < BARRIER_TARGET_HIT_POINTS[s.room.controller.level] || s.room.energyState > 1));
         let barrier = _.min(barriers, 'hits');
         let site = _.filter(creep.room.constructionSites, (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL))[0];
         if (!hostileBarrier.id && barriers.length && barrier.hits < 2000) {
@@ -102,5 +102,7 @@ function wallMaintainer(creep) {
             case ERR_NOT_IN_RANGE:
                 creep.shibMove(target, {range: 3})
         }
+    } else {
+        creep.idleFor(25);
     }
 }

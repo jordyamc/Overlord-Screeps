@@ -11,27 +11,27 @@
 
 module.exports.role = function (creep) {
     // If you lost your claim part... die
-    if (!creep.getActiveBodyparts(CLAIM)) creep.suicide();
+    if (!creep.hasActiveBodyparts(CLAIM)) creep.suicide();
     //Check if claim clear op
     if (creep.memory.operation === 'claimClear') return creep.claimClear();
     //Initial move
     if (creep.pos.roomName !== creep.memory.destination) {
         if (Game.gcl.level <= Memory.myRooms.length) {
             delete Memory.auxiliaryTargets[creep.room.name];
-            return creep.memory.recycle = true;
+            return creep.suicide();
         }
         creep.shibMove(new RoomPosition(25, 25, creep.memory.destination), {range: 23});
     } else {
         if (creep.room.controller) {
             if (creep.room.controller.owner) {
                 cleanRoom(creep.room, creep.room.structures);
-                creep.room.cacheRoomIntel(true);
-                return creep.memory.recycle = true;
+                creep.room.cacheRoomIntel(true, creep);
+                return creep.suicide();
             }
             if (!creep.pos.findClosestByPath(_.filter(creep.room.structures, (s) => s.structureType === STRUCTURE_CONTROLLER))) {
                 Memory.roomCache[creep.room.name].obstructions = true;
                 Memory.auxiliaryTargets[creep.room.name] = undefined;
-                return creep.memory.recycle = true;
+                return creep.suicide();
             }
             if (!creep.memory.signed) {
                 switch (creep.signController(creep.room.controller, _.sample(OWNED_ROOM_SIGNS))) {
@@ -39,7 +39,8 @@ module.exports.role = function (creep) {
                         creep.shibMove(creep.room.controller);
                         break;
                     case OK:
-                        creep.room.cacheRoomIntel(true);
+                        creep.room.memory = undefined;
+                        creep.room.cacheRoomIntel(true, creep);
                         creep.memory.signed = true;
                 }
             } else {

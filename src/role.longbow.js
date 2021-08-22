@@ -12,24 +12,13 @@
 module.exports.role = function (creep) {
     creep.attackInRange();
     creep.healInRange();
-    // Border Patrol
-    if (creep.memory.operation === 'borderPatrol') return creep.borderPatrol();
+    // Handle flee
+    if (!creep.hasActiveBodyparts(RANGED_ATTACK)) return creep.fleeHome(true);
     // Responder Mode
-    if (creep.memory.other && creep.memory.other.responseTarget) {
-        if (creep.memory.other.responseTarget) return creep.guardRoom();
-        creep.say(ICONS.respond, true);
-        if (!creep.handleMilitaryCreep(false, true)) {
-            if (creep.room.name !== creep.memory.other.responseTarget) {
-                return creep.shibMove(new RoomPosition(25, 25, creep.memory.other.responseTarget), {range: 18}); //to move to any room}
-            } else {
-                creep.findDefensivePosition(creep);
-            }
-        }
-        if (creep.memory.awaitingOrders) return creep.memory.other.responseTarget = undefined;
-    } else if (creep.memory.operation) {
+    if (creep.memory.operation) {
         switch (creep.memory.operation) {
-            case 'marauding':
-                creep.marauding();
+            case 'borderPatrol':
+                creep.borderPatrol();
                 break;
             case 'guard':
                 creep.guardRoom();
@@ -48,7 +37,12 @@ module.exports.role = function (creep) {
         if (creep.room.name !== creep.memory.destination) {
             return creep.shibMove(new RoomPosition(25, 25, creep.memory.destination), {range: 22});
         } else {
-            creep.handleMilitaryCreep();
+            // Handle combat
+            if (this.canIWin(50)) {
+                if (!this.handleMilitaryCreep() && !this.scorchedEarth()) this.findDefensivePosition();
+            } else {
+                this.shibKite();
+            }
         }
     }
 };

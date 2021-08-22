@@ -7,7 +7,7 @@
 
 module.exports.role = function (creep) {
     creep.say(ICONS.haul, true);
-    if (creep.towTruck()) return true;
+    if (creep.towTruck() || creep.wrongRoom()) return true;
     // If hauling do things
     if (_.sum(creep.store)) {
         if (_.sum(creep.store) > creep.store[RESOURCE_ENERGY]) {
@@ -24,14 +24,13 @@ module.exports.role = function (creep) {
                 }
             }
         } else {
+            creep.opportunisticFill();
             if (!creep.haulerDelivery()) creep.idleFor(5)
         }
     } else {
-        if (!creep.memory.cooldown && (creep.memory.energyDestination || creep.locateEnergy())) {
+        if (!creep.memory.energyDestination) creep.memory._shibMove = undefined;
+        if (creep.memory.energyDestination || creep.locateEnergy()) {
             creep.withdrawResource()
-        } else {
-            creep.memory.cooldown = undefined;
-            creep.idleFor(10)
         }
     }
 };

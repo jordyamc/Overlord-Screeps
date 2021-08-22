@@ -9,7 +9,7 @@ Creep.prototype.scoutRoom = function () {
     // Handle edge case where room is overlord
     if (this.memory.destination === this.memory.overlord) {
         delete Memory.targetRooms[this.room.name];
-        return this.memory.recycle = true;
+        return this.suicide();
     }
     if (this.room.name !== this.memory.destination) {
         return this.shibMove(new RoomPosition(25, 25, this.memory.destination), {
@@ -205,11 +205,11 @@ function forwardObserver(room) {
     }
     let otherRooms = _.filter(Memory.roomCache, (r) => r.name !== room.name && r.owner === Memory.roomCache[room.name].owner)[0]
     let towers = _.filter(room.structures, (c) => c.structureType === STRUCTURE_TOWER && c.store[RESOURCE_ENERGY] > 10 && c.isActive());
-    let armedEnemies = _.filter(room.hostileCreeps, (c) => (c.getActiveBodyparts(ATTACK) || c.getActiveBodyparts(RANGED_ATTACK)) && !_.includes(FRIENDLIES, c.owner.username));
+    let armedEnemies = _.filter(room.hostileCreeps, (c) => (c.hasActiveBodyparts(ATTACK) || c.hasActiveBodyparts(RANGED_ATTACK)) && !_.includes(FRIENDLIES, c.owner.username));
     if (towers.length) {
         delete Memory.targetRooms[room.name];
         log.a('Canceling operation in ' + roomLink(room.name) + '.', 'HIGH COMMAND: ');
-        return creep.room.cacheRoomIntel(true);
+        return room.cacheRoomIntel(true);
     } else if (armedEnemies.length) {
         Memory.targetRooms[room.name].level = 2;
     } else if (otherRooms || room.hostileCreeps.length) {

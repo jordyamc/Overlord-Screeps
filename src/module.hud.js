@@ -30,7 +30,8 @@ module.exports.hud = function () {
         }
     }
     progressPerTick = average(GCL_PROGRESS_ARRAY);
-    let secondsToUpgrade = _.round(((Game.gcl.progressTotal - Game.gcl.progress) / progressPerTick) * Memory.tickInfo.tickLength);
+    let tickLength = Memory.tickInfo ? Memory.tickInfo.tickLength : _.round(new Date().getTime() / 1000, 2)
+    let secondsToUpgrade = _.round(((Game.gcl.progressTotal - Game.gcl.progress) / progressPerTick) * tickLength);
     let ticksToUpgrade = _.round((Game.gcl.progressTotal - Game.gcl.progress) / progressPerTick);
     let displayTime;
     if (secondsToUpgrade < 60) displayTime = secondsToUpgrade + ' Seconds';
@@ -57,7 +58,7 @@ module.exports.hud = function () {
         displayText(room, 0, 1, paused + ICONS.upgradeController + ' GCL: ' + Game.gcl.level + ' - ' + displayTime + ' / ' + ticksToUpgrade + ' ticks. Bucket- ' + Game.cpu.bucket);
         //Safemode
         if (room.controller.safeMode) {
-            let secondsToNoSafe = room.controller.safeMode * Memory.tickInfo.tickLength;
+            let secondsToNoSafe = room.controller.safeMode * tickLength;
             let displayTime;
             if (secondsToNoSafe < 60) displayTime = secondsToNoSafe + ' Seconds';
             if (secondsToNoSafe >= 86400) displayTime = _.round(secondsToNoSafe / 86400, 2) + ' Days';
@@ -83,7 +84,7 @@ module.exports.hud = function () {
                     }
                 }
                 progressPerTick = average(siteInfo['progressArray']);
-                let secondsToUpgrade = _.round(((site.progressTotal - site.progress) / progressPerTick) * Memory.tickInfo.tickLength);
+                let secondsToUpgrade = _.round(((site.progressTotal - site.progress) / progressPerTick) * tickLength);
                 let ticksToUpgrade = _.round((site.progressTotal - site.progress) / progressPerTick);
                 let displayTime;
                 if (secondsToUpgrade < 60) displayTime = secondsToUpgrade + ' Seconds';
@@ -114,7 +115,7 @@ module.exports.hud = function () {
                 }
             }
             progressPerTick = average(RCL_PROGRESS[room.name]);
-            let secondsToUpgrade = _.round(((room.controller.progressTotal - room.controller.progress) / progressPerTick) * Memory.tickInfo.tickLength);
+            let secondsToUpgrade = _.round(((room.controller.progressTotal - room.controller.progress) / progressPerTick) * tickLength);
             let ticksToUpgrade = _.round((room.controller.progressTotal - room.controller.progress) / progressPerTick);
             let displayTime;
             if (secondsToUpgrade < 60) displayTime = secondsToUpgrade + ' Seconds';

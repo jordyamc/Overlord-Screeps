@@ -23,16 +23,14 @@ module.exports.overlordMind = function (room, CPULimit) {
     let mindStart = Game.cpu.getUsed();
 
     // Handle auto spawn placement
-    if (Memory.myRooms.length === 1 && !_.filter(Game.structures, (s) => s.structureType === STRUCTURE_SPAWN)[0]) {
+    if (Memory.myRooms.length === 1 && !_.find(Game.structures, (s) => s.structureType === STRUCTURE_SPAWN)) {
         planner.buildRoom(room);
     }
-
-    // Defense controller always runs
-    defense.controller(room);
 
     // Manage creeps
     let count = 0;
     let roomCreepCPU = 0;
+    let taskCpu = Game.cpu.getUsed();
     let roomCreeps = shuffle(_.filter(Game.creeps, (r) => r.memory.overlord === room.name && !r.memory.military && !r.spawning));
     let totalCreeps = roomCreeps.length
     do {
@@ -49,23 +47,24 @@ module.exports.overlordMind = function (room, CPULimit) {
         }
         if (CREEP_CPU_ARRAY[currentCreep.name]) roomCreepCPU += average(CREEP_CPU_ARRAY[currentCreep.name]);
     } while ((roomCreepCPU < CPULimit * 0.9 || Game.cpu.bucket > 7000) && count < totalCreeps)
+    tools.taskCPU('roomMinionController', Game.cpu.getUsed() - taskCpu, room.name);
     let spareCpu = (CPULimit * 0.9) - roomCreepCPU;
 
     // Room function loop
-    let overlordFunctions = shuffle([{name: 'roomState', f: state.setRoomState}, {
-        name: 'links',
-        f: links.linkControl
-    }, {name: 'terminals', f: terminals.terminalControl}, {name: 'roomBuilder', f: planner.buildRoom},
-        {name: 'observers', f: observers.observerControl}, {
-            name: 'factories',
-            f: factory.factoryControl
-        }, {name: 'spawning', f: creepSpawning}]);
+    let overlordFunctions = shuffle([{name: 'roomState', f: state.setRoomState},
+        {name: 'links', f: links.linkControl},
+        {name: 'terminals', f: terminals.terminalControl},
+        {name: 'roomBuilder', f: planner.buildRoom},
+        {name: 'observers', f: observers.observerControl},
+        {name: 'factories', f: factory.factoryControl},
+        {name: 'defense', f: defense.controller},
+        {name: 'spawning', f: creepSpawning}]);
     let functionCount = overlordFunctions.length;
     count = 0;
     let overlordTaskCurrentCPU = Game.cpu.getUsed();
     let overlordTaskTotalCPU = 0;
     do {
-        let taskCpu = Game.cpu.getUsed();
+        taskCpu = Game.cpu.getUsed();
         let currentFunction = _.first(overlordFunctions);
         if (!currentFunction) break;
         overlordFunctions = _.rest(overlordFunctions);
@@ -73,22 +72,15 @@ module.exports.overlordMind = function (room, CPULimit) {
         try {
             currentFunction.f(room);
         } catch (e) {
-            log.e('Error with overlord function');
+            log.e('Error with ' + currentFunction.name + ' function');
             log.e(e.stack);
             Game.notify(e.stack);
         }
         overlordTaskCurrentCPU = Game.cpu.getUsed() - overlordTaskCurrentCPU;
         overlordTaskTotalCPU += overlordTaskCurrentCPU;
-        tools.taskCPU(currentFunction.name, Game.cpu.getUsed() - taskCpu);
+        tools.taskCPU(currentFunction.name, Game.cpu.getUsed() - taskCpu, room.name);
     } while ((overlordTaskTotalCPU < (CPULimit * 0.1) + (spareCpu * 0.9) || Game.cpu.bucket > 9500) && count < functionCount)
 
-    // Get income
-    if (!ROOM_ENERGY_PER_TICK[room.name] || Game.time % 5 === 0) {
-        let income = 0;
-        let harvesters = _.filter(Game.creeps, (c) => c.memory.overlord === room.name && (c.memory.role === 'stationaryHarvester' || c.memory.role === 'remoteHarvester'));
-        harvesters.forEach((h) => income += h.getActiveBodyparts(WORK) * HARVEST_POWER);
-        ROOM_ENERGY_PER_TICK[room.name] = income;
-    }
 
     // Silence Alerts
     if (Game.time % 2500 === 0) {
@@ -100,7 +92,7 @@ module.exports.overlordMind = function (room, CPULimit) {
     // Store Data
     let used = Game.cpu.getUsed() - mindStart;
     let cpuUsageArray = ROOM_CPU_ARRAY[room.name] || [];
-    if (cpuUsageArray.length < 50) {
+    if (cpuUsageArray.length < 250) {
         cpuUsageArray.push(used)
     } else {
         cpuUsageArray.shift();
@@ -114,7 +106,7 @@ module.exports.overlordMind = function (room, CPULimit) {
             }
             //Game.notify(room.name + ' is using a high amount of CPU - ' + average(cpuUsageArray));
             for (let key in TASK_CPU_ARRAY[room.name]) {
-                log.e(_.capitalize(key) + ' Avg. CPU - ' + _.round(average(TASK_CPU_ARRAY[room.name][key]), 2));
+                //Game.notify(_.capitalize(key) + ' Avg. CPU - ' + _.round(average(TASK_CPU_ARRAY[room.name][key]), 2));
             }
             if (cpuOverCount >= 10 && Game.cpu.bucket < 8000) {
                 room.memory.cpuOverage = undefined;
@@ -139,11 +131,6 @@ let errorCount = {};
 function minionController(minion) {
     let cpuUsed = Game.cpu.getUsed();
     while (true) {
-        // If minion has been flagged to recycle do so
-        if (minion.memory.recycle) {
-            minion.recycleCreep();
-            break;
-        }
         // Set last managed tick
         minion.memory.lastManaged = Game.time;
         // Track Threat
@@ -155,15 +142,10 @@ function minionController(minion) {
             || (minion.memory.fleeNukeTime && minion.fleeNukeRoom())) {
             break;
         }
-        // Disable notifications
-        if (!minion.memory.notifyDisabled) {
-            minion.memory.notifyDisabled = true;
-            minion.notifyWhenAttacked(false);
-        }
         // Report intel chance
         if (minion.room.name !== minion.memory.overlord) {
             minion.room.invaderCheck();
-            minion.room.cacheRoomIntel();
+            minion.room.cacheRoomIntel(false, minion);
         }
         try {
             // Run role
@@ -182,9 +164,6 @@ function minionController(minion) {
             } else if (errorCount[minion.name] >= 50) {
                 if (errorCount[minion.name] === 50) log.e(minion.name + ' experienced an error in room ' + roomLink(minion.room.name) + ' and has been killed.');
                 minion.suicide();
-            } else {
-                if (errorCount[minion.name] >= 10) log.e(minion.name + ' experienced an error in room ' + roomLink(minion.room.name) + ' and has been marked for recycling due to hitting the error cap.');
-                minion.memory.recycle = true;
             }
         }
     }
@@ -192,32 +171,25 @@ function minionController(minion) {
     tools.creepCPU(minion, cpuUsed);
 }
 
+let tickTracker = {};
 function creepSpawning(room) {
+    let lastRun = tickTracker[room.name] || 0;
+    spawning.processBuildQueue(room);
+    if (lastRun + 5 > Game.time) return;
+    tickTracker[room.name] = Game.time;
     if (room.level < 2) {
         spawning.roomStartup(room);
         spawning.remoteCreepQueue(room);
     } else {
+        let spawnFunctions = shuffle([{name: 'essentialSpawning', f: spawning.essentialCreepQueue},
+            {name: 'miscSpawning', f: spawning.miscCreepQueue},
+            {name: 'remoteSpawning', f: spawning.remoteCreepQueue}]);
         try {
-            spawning.essentialCreepQueue(room);
+            spawnFunctions[0].f(room);
         } catch (e) {
-            log.e('Essential Queueing for room ' + room.name + ' experienced an error');
-            log.e(e.stack);
-            Game.notify(e.stack);
-        }
-        try {
-            if (!room.memory.lowPower) spawning.miscCreepQueue(room);
-        } catch (e) {
-            log.e('Misc Queueing for room ' + room.name + ' experienced an error');
-            log.e(e.stack);
-            Game.notify(e.stack);
-        }
-        try {
-            spawning.remoteCreepQueue(room);
-        } catch (e) {
-            log.e('Remote Creep Queuing for room ' + room.name + ' experienced an error');
+            log.e(spawnFunctions[0].name + ' for room ' + room.name + ' experienced an error');
             log.e(e.stack);
             Game.notify(e.stack);
         }
     }
-    spawning.processBuildQueue(room);
 }

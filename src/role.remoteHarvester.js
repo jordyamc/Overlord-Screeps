@@ -15,6 +15,17 @@ module.exports.role = function (creep) {
     // If you're in place just harvest
     if (creep.memory.onContainer) {
         if (Math.random() > 0.98) return creep.memory.onContainer = undefined;
+        // Handle setting the pickup for a hauler
+        if (creep.memory.containerID) {
+            let container = Game.getObjectById(creep.memory.containerID);
+            if (!container) return creep.memory.containerID = undefined;
+            if (creep.store[RESOURCE_ENERGY] && container.hits < container.hitsMax * 0.7) creep.repair(container);
+            else if (_.sum(container.store) >= CONTAINER_CAPACITY * 0.75 && container.hits < container.hitsMax) creep.repair(container);
+            else if (_.sum(container.store) >= CONTAINER_CAPACITY) creep.idleFor(20);
+            creep.memory.needHauler = creep.memory.containerID;
+        } else if (creep.pos.checkForEnergy()) {
+            creep.memory.needHauler = creep.pos.checkForEnergy().id;
+        }
         let source = Game.getObjectById(creep.memory.other.source);
         switch (creep.harvest(source)) {
             case ERR_NOT_IN_RANGE:
@@ -24,20 +35,8 @@ module.exports.role = function (creep) {
                 creep.idleFor(source.ticksToRegeneration + 1);
                 break;
             case OK:
-                // Handle setting the pickup for a hauler
-                if (creep.memory.containerID) {
-                    creep.memory.needHauler = creep.memory.containerID;
-                } else if (creep.pos.checkForEnergy()) {
-                    creep.memory.needHauler = creep.pos.checkForEnergy().id;
-                }
                 // Handle container
-                if (creep.memory.containerID && Game.time % 20) {
-                    let container = Game.getObjectById(creep.memory.containerID);
-                    if (creep.store[RESOURCE_ENERGY] && container.hits < container.hitsMax * 0.4) return creep.repair(container);
-                    else if (_.sum(container.store) >= CONTAINER_CAPACITY * 0.75 && container.hits < container.hitsMax) creep.repair(container);
-                    else if (_.sum(container.store) >= CONTAINER_CAPACITY) creep.idleFor(20);
-                } else if (!creep.memory.containerID) {
-                    creep.memory.containerID = undefined;
+                if (!creep.memory.containerID) {
                     if (creep.pos.checkForConstructionSites() && creep.pos.checkForEnergy() && creep.pos.checkForEnergy().energy >= 500) {
                         creep.build(creep.pos.checkForConstructionSites());
                     }
@@ -69,22 +68,22 @@ module.exports.role = function (creep) {
                 case OK:
                     //Suicide and cache intel if room is reserved/owned by someone else
                     if (creep.room.controller && ((creep.room.controller.reservation && creep.room.controller.reservation.username !== MY_USERNAME) || creep.room.controller.owner)) {
-                        creep.room.cacheRoomIntel(true);
-                        return creep.memory.recycle = true;
+                        creep.room.cacheRoomIntel(true, creep);
+                        return creep.suicide();
                     }
                     // Set the travel range in the source memory
                     if (!creep.memory.carryAmountNeeded) {
-                        if (!source.memory.travelRange) {
+                        if (!source.memory.travelRange || Math.random() > 0.5) {
                             let goHome = Game.map.findExit(creep.room.name, creep.memory.overlord);
                             let homeExit = creep.room.find(goHome);
                             let homeMiddle = _.round(homeExit.length / 2);
-                            let distanceToExit = source.pos.findPathTo(homeExit[homeMiddle]).length
+                            let distanceToExit = source.pos.getRangeTo(homeExit[homeMiddle]);
                             let roomRange = Game.map.findRoute(creep.room.name, creep.memory.overlord).length;
-                            let total = distanceToExit + distanceToExit + 20;
-                            if (roomRange > 1) total = distanceToExit + (roomRange * 40);
+                            let total = distanceToExit + 20;
+                            if (roomRange > 1) total += (roomRange * 40);
                             source.memory.travelRange = total;
                         }
-                        creep.memory.carryAmountNeeded = _.round(((source.memory.travelRange) / (11 - creep.getActiveBodyparts(WORK))) * 75);
+                        creep.memory.carryAmountNeeded = _.round((source.memory.travelRange * 1.7) * ((creep.getActiveBodyparts(WORK) + 1) * HARVEST_POWER));
                     }
                     if (!creep.memory.containerID || !Game.getObjectById(creep.memory.containerID)) {
                         creep.memory.containerID = harvestDepositContainer(Game.getObjectById(creep.memory.other.source), creep);

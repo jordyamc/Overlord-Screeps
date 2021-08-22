@@ -14,8 +14,8 @@ module.exports.role = function (creep) {
         // Handle invader cores in sk
         let core = _.filter(creep.room.structures, (s) => s.structureType === STRUCTURE_INVADER_CORE)[0];
         if (core) {
-            creep.room.cacheRoomIntel(true);
-            return creep.memory.recycle = true;
+            creep.room.cacheRoomIntel(true, creep);
+            return creep.suicide();
         }
         let invaders = _.filter(creep.room.creeps, (c) => c.owner.username === 'Invader');
         if (invaders.length > 1) {
@@ -24,14 +24,14 @@ module.exports.role = function (creep) {
             Memory.roomCache[creep.room.name].invaderCooldown = undefined;
         }
         creep.attackInRange();
-        let sourceKeeper = creep.pos.findClosestByRange(creep.pos.findInRange(creep.room.hostileCreeps, 30, {filter: (c) => (c.getActiveBodyparts(ATTACK) || c.getActiveBodyparts(RANGED_ATTACK) || c.getActiveBodyparts(HEAL))})) ||
+        let sourceKeeper = creep.pos.findClosestByRange(creep.pos.findInRange(creep.room.hostileCreeps, 30, {filter: (c) => (c.hasActiveBodyparts(ATTACK) || c.hasActiveBodyparts(RANGED_ATTACK) || c.hasActiveBodyparts(HEAL))})) ||
             creep.pos.findClosestByRange(creep.room.creeps, {filter: (c) => c.owner.username === 'Source Keeper'});
         if (sourceKeeper) {
             switch (creep.attack(sourceKeeper)) {
                 case ERR_NOT_IN_RANGE:
                     if (creep.hits < creep.hitsMax) {
                         creep.heal(creep);
-                        if (creep.hits < creep.hitsMax * 0.8 && creep.pos.getRangeTo(sourceKeeper) >= 5) return;
+                        if (creep.hits < creep.hitsMax * 0.8 && creep.pos.getRangeTo(sourceKeeper) > 7) return;
                     }
                     creep.shibMove(sourceKeeper);
                     break;

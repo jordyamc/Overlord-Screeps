@@ -4,15 +4,20 @@
  * Name - Bob Sardinia
  * Project - Overlord-Bot (Screeps)
  */
+let lastTick = 0;
 
 module.exports.claimNewRoom = function () {
-    if (Memory.tickCooldowns.expansionTick + 150 > Game.time) return;
+    if (lastTick + 1000 > Game.time) return;
     let claimTarget = Memory.nextClaim;
-    Memory.tickCooldowns.expansionTick = Game.time;
+    if (Math.random() > 0.75) claimTarget = undefined;
+    lastTick = Game.time;
     if (!claimTarget) {
         let worthyRooms = _.filter(Memory.roomCache, (r) => (!r.noClaim || r.noClaim + 3000 < Game.time) && r.hubCheck && r.closestRange <= 12 &&
-            Game.map.getRoomStatus(r.name).status === Game.map.getRoomStatus(Memory.myRooms[0]).status && !r.obstructions);
-        if (!worthyRooms.length) return;
+            Game.map.getRoomStatus(r.name).status === Game.map.getRoomStatus(Memory.myRooms[0]).status && !r.obstructions && !r.owner && !r.reservation);
+        if (!worthyRooms.length) {
+            log.a('No worthy rooms available to claim.');
+            return;
+        }
         let possibles = {};
         worthy:
             for (let key in worthyRooms) {
@@ -26,18 +31,18 @@ module.exports.claimNewRoom = function () {
                     let distance = Game.map.getRoomLinearDistance(name, avoidName)
                     if (distance <= 2) distance = Game.map.findRoute(name, avoidName).length;
                     if (distance <= 2) continue worthy; else if (distance === 3) baseScore += 1000; else if (distance < 6) baseScore += 100; else if (distance > 20) continue worthy; else baseScore -= 1000;
+                    // Sector check for allies
+                    if (AVOID_ALLIED_SECTORS && sameSectorCheck(name, avoidName)) continue worthy;
                 }
                 // Remote access
-                let neighboring = Game.map.describeExits(name);
-                if (!neighboring) continue;
+                let neighboring = _.map(Game.map.describeExits(name));
                 let sourceCount = 0;
-                if (neighboring['1'] && Memory.roomCache[neighboring['1']] && !Memory.roomCache[neighboring['1']].user) sourceCount += Memory.roomCache[neighboring['1']].sources;
-                if (neighboring['3'] && Memory.roomCache[neighboring['3']] && !Memory.roomCache[neighboring['3']].user) sourceCount += Memory.roomCache[neighboring['3']].sources;
-                if (neighboring['5'] && Memory.roomCache[neighboring['5']] && !Memory.roomCache[neighboring['5']].user) sourceCount += Memory.roomCache[neighboring['5']].sources;
-                if (neighboring['7'] && Memory.roomCache[neighboring['7']] && !Memory.roomCache[neighboring['7']].user) sourceCount += Memory.roomCache[neighboring['7']].sources;
+                neighboring.forEach(function (r) {
+                    if (Memory.roomCache[r] && !Memory.roomCache[r].user) sourceCount += Memory.roomCache[r].sources;
+                })
+                // No remotes is a big negative
+                if (!sourceCount) continue;
                 baseScore += (sourceCount * 250);
-                // Prioritize fortress rooms if enemies exist
-                if (Memory._enemies && Memory._enemies.length && _.size(Game.map.describeExits(name) < 2)) baseScore += 1000;
                 // Swamps suck
                 let terrain = Game.map.getRoomTerrain(name);
                 let terrainScore = 0;
@@ -86,11 +91,12 @@ module.exports.claimNewRoom = function () {
         let limit = Game.gcl.level;
         // Special novice/respawn zone cases
         if (Game.map.getRoomStatus(Memory.myRooms[0]).status === 'novice') limit = 3;
+        if (Game.cpu.bucket < BUCKET_MAX) limit = 1;
         if (limit <= Memory.myRooms.length || Memory.spawnIn + 7500 > Game.time || Memory.minLevel < 3 || _.filter(Memory.auxiliaryTargets, (t) => t && (t.type === 'claimScout' || t.type === 'claim'))[0]) {
             if (Memory.nextClaim !== claimTarget) {
                 log.a('Next claim target set to ' + roomLink(claimTarget) + ' once available.', 'EXPANSION CONTROL: ');
                 Memory.nextClaim = claimTarget;
-            }
+            } else if (!Memory.roomCache[claimTarget] || Memory.roomCache[claimTarget].owner) Memory.nextClaim = undefined;
         } else {
             Memory.nextClaim = undefined;
             let cache = Memory.auxiliaryTargets || {};
@@ -103,5 +109,7 @@ module.exports.claimNewRoom = function () {
             Memory.auxiliaryTargets = cache;
             log.a('Claim Mission For ' + roomLink(claimTarget) + ' Initiated.', 'EXPANSION CONTROL: ');
         }
+    } else {
+        log.a('No worthy target to claim.');
     }
 };

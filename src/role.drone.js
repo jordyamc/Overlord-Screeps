@@ -17,6 +17,8 @@ module.exports.role = function role(creep) {
     if (creep.memory.destination && creep.room.name !== creep.memory.destination && !creep.memory.remoteMining) {
         return creep.shibMove(new RoomPosition(25, 25, creep.memory.destination), {range: 24});
     }
+    // If no work parts, useless so suicide
+    if (!creep.hasActiveBodyparts(WORK)) return creep.suicide();
     // Checks
     if (creep.isFull) {
         creep.memory.source = undefined;
@@ -27,6 +29,7 @@ module.exports.role = function role(creep) {
     } else if (!creep.store[RESOURCE_ENERGY]) creep.memory.working = false;
     // Work
     if (creep.memory.working === true) {
+        creep.memory.other.noBump = true;
         // If haulers needed haul
         if (hauling(creep)) return;
         // If builder needed build
@@ -35,17 +38,19 @@ module.exports.role = function role(creep) {
         if (upgrading(creep)) return;
         //creep.idleFor(15);
     } else {
+        creep.memory.other.noBump = undefined;
         creep.memory.working = undefined;
         creep.memory.constructionSite = undefined;
         creep.memory.task = undefined;
         creep.memory.task = undefined;
-        if (!creep.memory.harvest && (creep.memory.energyDestination || creep.locateEnergy())) {
+        if (!creep.memory.harvest && Memory.roomCache[creep.room.name].user === MY_USERNAME && (creep.memory.energyDestination || creep.locateEnergy())) {
             creep.say('Energy!', true);
             creep.withdrawResource();
         } else {
+            creep.memory.other.noBump = true;
             creep.memory.harvest = true;
             let source = Game.getObjectById(creep.memory.source) || creep.pos.getClosestSource();
-            if (source) {
+            if (source && (!Memory.roomCache[creep.room.name].user || Memory.roomCache[creep.room.name].user === MY_USERNAME)) {
                 creep.say('Harvest!', true);
                 creep.memory.source = source.id;
                 switch (creep.harvest(source)) {
@@ -61,7 +66,7 @@ module.exports.role = function role(creep) {
                 }
             } else {
                 if (creep.memory.remoteMining || findRemoteSource(creep)) {
-                    if (creep.memory.remoteMining !== creep.room.name) return creep.shibMove(new RoomPosition(25, 25, creep.memory.remoteMining), {range: 24});
+                    if (creep.memory.remoteMining !== creep.room.name) return creep.shibMove(new RoomPosition(25, 25, creep.memory.remoteMining), {range: 24}); else creep.memory.remoteMining = undefined;
                 } else {
                     delete creep.memory.harvest;
                     creep.idleFor(5);
@@ -110,9 +115,9 @@ function building(creep) {
 function hauling(creep) {
     if (creep.memory.task && creep.memory.task !== 'haul') return;
     if (!creep.room.controller || !creep.room.controller.owner || creep.room.controller.owner.username !== MY_USERNAME) return false;
-    let haulers = _.filter(creep.room.creeps, (c) => c.my && c.memory && ((c.memory.role === 'drone' && c.memory.task === 'haul') || c.memory.role === 'hauler' || c.memory.role === 'filler'));
+    let haulers = _.filter(creep.room.creeps, (c) => c.my && c.memory && ((c.memory.role === 'drone' && c.memory.task === 'haul') || c.memory.role === 'hauler' || c.memory.role === 'shuttle')).length < 2;
     let needyTower = _.filter(creep.room.structures, (s) => s.structureType === STRUCTURE_TOWER && s.store[RESOURCE_ENERGY] < TOWER_CAPACITY * 0.1).length > 0;
-    if (creep.memory.task === 'haul' || (creep.isFull && (!haulers.length || needyTower) && !creep.memory.task && (creep.room.energyAvailable < creep.room.energyCapacityAvailable || needyTower))) {
+    if (creep.memory.task === 'haul' || (creep.room.level <= 4 && creep.isFull && (haulers || needyTower) && !creep.memory.task && (creep.room.energyAvailable < creep.room.energyCapacityAvailable || needyTower))) {
         creep.memory.task = 'haul';
         creep.say('Haul!', true);
         if (creep.memory.storageDestination || creep.haulerDelivery()) {
@@ -158,7 +163,6 @@ function upgrading(creep) {
 }
 
 function findRemoteSource(creep) {
-    if (creep.room.controller && creep.room.controller.level > 2) return false;
     let adjacent = _.filter(Game.map.describeExits(creep.pos.roomName), (r) => !Memory.roomCache[r] ||
         ((!Memory.roomCache[r].user || Memory.roomCache[r].user === MY_USERNAME) && !Memory.roomCache[r].sk && Memory.roomCache[r].sources));
     if (adjacent.length) {

@@ -13,7 +13,7 @@ module.exports.diplomacyOverlord = function () {
     if (Game.time % 5 === 0 && Memory._userList) threatManager();
     //Manage symbol list for seasonal
     if (Game.shard.name === 'shardSeason' && Game.time % 1000 === 0) {
-        Memory.ownedSymbols = _.uniq(_.pluck(_.filter(Memory.roomCache, (r) => r.owner && _.includes(FRIENDLIES, r.owner) && r.closestRange < 15 && r.level >= 7), 'seasonDecoder'));
+        Memory.ownedSymbols = _.uniq(_.pluck(_.filter(Memory.roomCache, (r) => r.owner && _.includes(FRIENDLIES, r.owner) && r.closestRange < 15 && r.level >= SEASON_RCL_CUTOFF), 'seasonDecoder'));
     }
 };
 
@@ -75,6 +75,7 @@ function threatManager() {
 }
 
 module.exports.trackThreat = function (creep) {
+    if (!creep.room.hostileCreeps.length) return;
     // Handle enemies being attacked
     if (creep.room.hostileCreeps.length) {
         // Store usernames
@@ -109,7 +110,7 @@ module.exports.trackThreat = function (creep) {
         if (!Memory.roomCache[creep.room.name]) creep.room.cacheRoomIntel();
         Memory.roomCache[creep.room.name].lastCombat = Game.time;
         if (creep.room.controller && ((creep.room.controller.owner && creep.room.controller.owner.username !== MY_USERNAME) || (creep.room.controller.reservation && creep.room.controller.reservation.username !== MY_USERNAME)) && creep.memory.destination !== creep.room.name) return false;
-        let nearbyCreeps = _.uniq(_.pluck(_.filter(creep.room.creeps, (c) => ((c.getActiveBodyparts(RANGED_ATTACK) && c.pos.getRangeTo(creep) <= 3) || (c.getActiveBodyparts(ATTACK) && c.pos.isNearTo(creep))) && c.owner.username !== MY_USERNAME), 'owner.username'));
+        let nearbyCreeps = _.uniq(_.pluck(_.filter(creep.room.creeps, (c) => ((c.hasActiveBodyparts(RANGED_ATTACK) && c.pos.inRangeTo(creep, 3)) || (c.hasActiveBodyparts(ATTACK) && c.pos.isNearTo(creep))) && c.owner.username !== MY_USERNAME), 'owner.username'));
         if (nearbyCreeps.length) {
             for (let user of nearbyCreeps) {
                 if (user === 'Source Keeper') {
@@ -159,11 +160,11 @@ module.exports.trackThreat = function (creep) {
     }
     creep.memory._lastHits = creep.hits;
     // Handle hostile creeps in owned rooms
-    if (Memory.roomCache[creep.room.name] && Memory.roomCache[creep.room.name].user === MY_USERNAME) {
-        let neutrals = _.uniq(_.pluck(_.filter(creep.room.creeps, (c) => !c.my && !_.includes(FRIENDLIES, c.owner.username) && c.owner.username !== 'Invader' && c.owner.username !== 'Source Keeper'), 'owner.username'));
+    if (creep.room.hostileCreeps.length && Memory.roomCache[creep.room.name] && Memory.roomCache[creep.room.name].user === MY_USERNAME) {
+        let neutrals = _.uniq(_.pluck(creep.room.hostileCreeps, 'owner.username'));
         if (neutrals.length) {
             for (let user of neutrals) {
-                if (user === MY_USERNAME || _.includes(FRIENDLIES, user) || Memory.roomCache[creep.room.name].isHighway) continue;
+                if ([MY_USERNAME, 'Invader', 'Source Keeper'].includes(user) || FRIENDLIES.includes(user) || Memory.roomCache[creep.room.name].isHighway) continue;
                 let cache = Memory._userList || {};
                 if (cache[user] && cache[user].lastAction + 50 > Game.time) continue;
                 let standing;
@@ -187,18 +188,12 @@ module.exports.trackThreat = function (creep) {
 function friendlyListManagement() {
 //Alliance List Management
     let doNotAggressArray;
-    let earnedFriends = [];
-    if (Memory._userList && _.filter(Memory._userList, (u) => u.standing > 0)) {
-        for (let user in _.filter(Memory._userList, (u) => u.standing > 0)) {
-            earnedFriends.push(user);
-        }
-    }
     if (!!~['shard0', 'shard1', 'shard2', 'shard3'].indexOf(Game.shard.name)) {
         doNotAggressArray = LOANlist;
-        doNotAggressArray = _.union(doNotAggressArray, MANUAL_FRIENDS, [MY_USERNAME], ['Shibdib'], earnedFriends);
+        doNotAggressArray = _.union(doNotAggressArray, MANUAL_FRIENDS, [MY_USERNAME], ['Shibdib']);
     } else {
         doNotAggressArray = [MY_USERNAME, 'Shibdib'];
-        doNotAggressArray = _.union(doNotAggressArray, MANUAL_FRIENDS, earnedFriends);
+        doNotAggressArray = _.union(doNotAggressArray, MANUAL_FRIENDS);
     }
     global.FRIENDLIES = doNotAggressArray;
 }

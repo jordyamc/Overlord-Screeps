@@ -6,13 +6,11 @@
  */
 
 Creep.prototype.guardRoom = function () {
-    let destination = this.memory.destination || this.memory.other.responseTarget;
+    let destination = this.memory.destination;
     let sentence = ['Security', 'Guard', 'For', destination];
     let word = Game.time % sentence.length;
     this.say(sentence[word], true);
     // If military action required do that
-    this.attackInRange();
-    if (this.hits < this.hitsMax) this.heal(this); else this.healInRange();
     if (this.room.name !== destination) return this.shibMove(new RoomPosition(25, 25, destination), {range: 24});
     let guardLocation, guardRange;
     /** Season 1
@@ -25,12 +23,13 @@ Creep.prototype.guardRoom = function () {
         }
         guardRange = 8;
     } **/
-    if (!this.handleMilitaryCreep(false, true, false, false, guardLocation, guardRange)) {
-        if (!guardLocation) {
-            if (this.findDefensivePosition(this)) this.goToHub(destination);
-        } else {
-            this.shibMove(guardLocation, {range: guardRange})
-        }
+    // Handle combat
+    if (this.canIWin(50)) {
+        if (this.room.hostileCreeps.length || this.room.hostileStructures.length) {
+            this.handleMilitaryCreep()
+        } else this.findDefensivePosition();
+    } else {
+        this.shibKite();
     }
     levelManager(this);
 };
@@ -44,7 +43,7 @@ function levelManager(creep) {
     }
     if (Memory.targetRooms[creep.memory.destination]) {
         let enemyCreeps = _.filter(creep.room.creeps, (c) => !_.includes(FRIENDLIES, c.owner.username));
-        let armedEnemies = _.filter(enemyCreeps, (c) => c.getActiveBodyparts(ATTACK) || c.getActiveBodyparts(RANGED_ATTACK));
+        let armedEnemies = _.filter(enemyCreeps, (c) => c.hasActiveBodyparts(ATTACK) || c.hasActiveBodyparts(RANGED_ATTACK));
         if (armedEnemies.length) {
             Memory.targetRooms[creep.memory.destination].level = 2;
         } else if (enemyCreeps.length) {

@@ -4,8 +4,12 @@
  * Name - Bob Sardinia
  * Project - Overlord-Bot (Screeps)
  */
+let tickTracker = {};
 
 module.exports.factoryControl = function (room) {
+    let lastRun = tickTracker[room.name] || 0;
+    if (lastRun + 25 > Game.time) return;
+    tickTracker[room.name] = Game.time;
     // Check for factory
     if (room.factory && !room.nukes.length && !room.memory.lowPower) {
         // If factory is set to produce do so
@@ -19,7 +23,7 @@ module.exports.factoryControl = function (room) {
             }
             // Check if it's still good to produce
             if (room.factory.memory.producing !== RESOURCE_ENERGY) {
-                if (room.factory.memory.producing === RESOURCE_BATTERY && room.store(RESOURCE_ENERGY) < ENERGY_AMOUNT) {
+                if (room.factory.memory.producing === RESOURCE_BATTERY && room.store(RESOURCE_ENERGY) < ENERGY_AMOUNT[room.level]) {
                     log.a('No longer producing ' + room.factory.memory.producing + ' in ' + roomLink(room.name) + ' due to falling below the energy target.', ' FACTORY CONTROL:');
                     return delete room.factory.memory.producing;
                 }
@@ -31,22 +35,20 @@ module.exports.factoryControl = function (room) {
                     log.a('No longer producing ' + room.factory.memory.producing + ' in ' + roomLink(room.name) + ' due to being low on energy.', ' FACTORY CONTROL:');
                     return delete room.factory.memory.producing;
                 }
-                if (Math.random() > 0.5) {
-                    for (let neededResource of Object.keys(COMMODITIES[room.factory.memory.producing].components)) {
-                        if (room.store(neededResource) < COMMODITIES[room.factory.memory.producing].components[neededResource] ||
-                            _.includes(BASE_MINERALS, neededResource) && room.store(neededResource) < REACTION_AMOUNT * 0.3) {
-                            log.a('No longer producing ' + room.factory.memory.producing + ' in ' + roomLink(room.name) + ' due to a shortage of ' + neededResource, ' FACTORY CONTROL:');
-                            return delete room.factory.memory.producing;
-                        }
+                for (let neededResource of Object.keys(COMMODITIES[room.factory.memory.producing].components)) {
+                    if (room.store(neededResource) < COMMODITIES[room.factory.memory.producing].components[neededResource] ||
+                        _.includes(BASE_MINERALS, neededResource) && room.store(neededResource) < REACTION_AMOUNT * 0.7) {
+                        log.a('No longer producing ' + room.factory.memory.producing + ' in ' + roomLink(room.name) + ' due to a shortage of ' + neededResource, ' FACTORY CONTROL:');
+                        return delete room.factory.memory.producing;
                     }
                 }
-            } else if (room.store(RESOURCE_ENERGY) > ENERGY_AMOUNT * 1.5 || room.store(RESOURCE_BATTERY) < 50) {
+            } else if (room.store(RESOURCE_ENERGY) > ENERGY_AMOUNT[room.level] * 1.5 || room.store(RESOURCE_BATTERY) < 50) {
                 return delete room.factory.memory.producing;
             }
-        } else if (!room.factory.memory.producing && room.store(RESOURCE_ENERGY) < ENERGY_AMOUNT && room.store(RESOURCE_BATTERY) >= 50) {
+        } else if (!room.factory.memory.producing && room.store(RESOURCE_ENERGY) < ENERGY_AMOUNT[room.level] && room.store(RESOURCE_BATTERY) >= 50) {
             log.a('Converting ' + RESOURCE_BATTERY + ' to ENERGY in ' + roomLink(room.name), ' FACTORY CONTROL:');
             return room.factory.memory.producing = RESOURCE_ENERGY;
-        } else if (room.energy >= FACTORY_CUTOFF && Game.time % 25 === 0) {
+        } else if (Game.time % 25 === 0) {
             // If nothing is set to produce, every 25 ticks check and see if anything should be
             if (!room.factory.memory.producing) {
                 if (room.energyState > 1) {
@@ -72,10 +74,7 @@ module.exports.factoryControl = function (room) {
                         if (!COMMODITIES[commodity] || (room.store(commodity) >= DUMP_AMOUNT * 0.9 && !_.includes(COMPRESSED_COMMODITIES, commodity))) continue;
                         if (commodity === RESOURCE_BATTERY) continue;
                         // Handle levels
-                        if (COMMODITIES[commodity].level) {
-                            let powerCreep = _.filter(room.powerCreeps, (p) => p.my && p.powers[PWR_OPERATE_FACTORY] && p.powers[PWR_OPERATE_FACTORY].level === COMMODITIES[commodity].level)[0];
-                            if (!powerCreep) continue;
-                        }
+                        if (COMMODITIES[commodity].level && room.factory.level !== COMMODITIES[commodity].level && room.factory.level) continue;
                         let enough;
                         for (let neededResource of Object.keys(COMMODITIES[commodity].components)) {
                             enough = false;

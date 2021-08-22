@@ -9,7 +9,7 @@ let highCommand = require('military.highCommand');
 
 Creep.prototype.drainRoom = function () {
     // If room is no longer a target
-    if (!Memory.targetRooms[this.memory.destination]) return this.memory.recycle = true;
+    if (!Memory.targetRooms[this.memory.destination]) return this.suicide();
     // Handle healing
     this.healInRange();
     if (this.room.name === this.memory.destination) {
@@ -45,7 +45,7 @@ Creep.prototype.drainRoom = function () {
 
 borderHump = function (creep) {
     let exit = creep.pos.findClosestByRange(FIND_EXIT);
-    if (creep.hits < creep.hitsMax * 0.9 && !creep.getActiveBodyparts(TOUGH) && creep.room.name === creep.memory.destination) {
+    if (creep.hits < creep.hitsMax * 0.9 && !creep.hasActiveBodyparts(TOUGH) && creep.room.name === creep.memory.destination) {
         if (creep.pos.getRangeTo(exit) <= 4) Memory.roomCache[creep.room.name].noDrain = undefined;
         return creep.shibMove(exit, {ignoreCreeps: false, range: 0});
     } else if (creep.hits === creep.hitsMax && creep.room.name === creep.memory.destination) {
@@ -55,7 +55,7 @@ borderHump = function (creep) {
         if (Memory.roomCache[creep.room.name].noDrain >= 15) {
             delete Memory.targetRooms[creep.room.name]
             Memory.roomCache[creep.room.name].noDrain = true;
-            creep.memory.recycle = true;
+            creep.suicide();
         }
         creep.heal(creep);
         creep.shibMove(new RoomPosition(25, 25, creep.memory.destination), {range: 15})
