@@ -666,6 +666,16 @@ let globals = function () {
             }
         }
     };
+
+    global.closeRamparts = function (roomName){
+        const room = Game.rooms[roomName]
+        if (room) {
+            _.filter(room.structures, (s) => s.structureType === STRUCTURE_RAMPART && s.isPublic).forEach((rampart) => rampart.setPublic(false));
+            return "Ramparts closed in " + roomName;
+        } else  {
+            return "Room " + roomName + " not found"
+        }
+    };
 };
 
 module.exports = globals;

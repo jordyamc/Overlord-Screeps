@@ -84,9 +84,11 @@ module.exports.controller = function (room) {
 function rampartManager(room, structures) {
     let enemies = _.filter(room.creeps, (c) => !_.includes(FRIENDLIES, c.owner.username));
     // Open all if no enemies
-    if (!enemies.length) {
+    if (RAMPART_ACCESS && !enemies.length) {
         _.filter(structures, (s) => s.structureType === STRUCTURE_RAMPART && !s.isPublic).forEach((rampart) => rampart.setPublic(true));
         return;
+    } else {
+        closeRamparts(room, structures)
     }
     // Handle ramparts near enemies
     let allies = _.filter(room.creeps, (c) => _.includes(FRIENDLIES, c.owner.username) && !c.my);
